@@ -8,18 +8,18 @@ course.
 
 ## License
 
-- ConfirmationDialog: GNU LGPL
-- ConfirmationDialogDemo: CC-BY
-- ConfirmationDialogTests: WTFPL
+GNU Lesser General Public Licene
 
 ## Links
 
-- Forum (Czech language): http://forum.nette.org/cs/2636-confirmationdialog
-- Documentation (Czech language): http://addons.nette.org/cs/confirmationdialog
+- documentation (Czech language): http://addons.nette.org/cs/confirmationdialog
+- forum (Czech language): http://forum.nette.org/cs/2636-confirmationdialog
 
 ## Authors
 
-(c) 2009-2010, Lukáš Doležal
+- Lukáš Doležal
+- Václav Šír
+- Igor Hlina
 
 
 [nette]: http://nette.org/

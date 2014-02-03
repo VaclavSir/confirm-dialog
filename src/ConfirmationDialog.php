@@ -1,12 +1,5 @@
 <?php
 
-use Nette\Application\UI\Control;
-use Nette\Application\UI\Form;
-use Nette\Utils\Html;
-use Nette\Environment;
-use Nette\MemberAccessException;
-use Nette\InvalidStateException;
-
 /**
  * Confirmation dialog with dynamic signals
  *
@@ -20,12 +13,17 @@ use Nette\InvalidStateException;
  * @package    ConfirmationDialog
  */
 
+use Nette\Application\UI\Form,
+	Nette\Utils\Html;
 
-class ConfirmationDialog extends Control
+
+class ConfirmationDialog extends Nette\Application\UI\Control
 {
 
-    // Localization strings
-    public static $_strings = array(
+	/**
+	 * @var array localization strings
+	 */
+	public static $_strings = array(
 		'yes' => 'Yes',
 		'no' => 'No',
 		'expired' => 'Confirmation token has expired. Please try action again.',
@@ -34,36 +32,48 @@ class ConfirmationDialog extends Control
 	/** @var Nette\Application\UI\Form */
 	private $form;
 
-	/** @var Nette\Utils\Html Confirmation question */
+	/** @var Nette\Utils\Html confirmation question */
 	private $question;
 
 	/** @var Nette\Http\Session */
 	private $session;
 
-	/** @var array Storage of confirmation handlers*/
+	/** @var array storage of confirmation handlers */
 	private $confirmationHandlers;
 
 	/** @var bool */
-	public $show = FALSE;
+	public $visible = FALSE;
 
-	/** @var string class of div element */
-	public $dialogClass = 'confirm_dialog';
+	/** @var string */
+	public $cssClass = 'confirmation-dialog';
 
+
+	/**
+	 * @param Nette\Http\SessionSection $session
+	 * @param Nette\ComponentModel\IContainer|null $parent
+	 * @param null $name
+	 */
 	public function __construct(\Nette\Http\SessionSection $session, $parent = NULL, $name = NULL)
 	{
 		parent::__construct($parent, $name);
 
+		$this->session = $session;
+		$this->question = Html::el('p')->addAttributes(array('class'=>"{$this->cssClass}--question"));
+
 		$this->form = new Form($this, 'form');
+		$this->form->getElementPrototype()->class = "{$this->cssClass}--form";
+		$this->form->getRenderer()->wrappers['controls']['container'] = NULL;
+
+		$this->form->addHidden('token');
 
 		$this->form->addSubmit('yes', self::$_strings['yes'])
 			->onClick[] = array($this, 'confirmClicked');
+
 		$this->form->addSubmit('no', self::$_strings['no'])
 			->onClick[] = array($this, 'cancelClicked');
-		$this->form->addHidden('token');
 
-		$this->question = Html::el('p');
-
-		$this->session = $session; //Environment::getSession('ConfirmationDialog/tokens');
+		$this->form['yes']->getControlPrototype()->class = 'btn';
+		$this->form['no']->getControlPrototype()->class = 'btn';
 	}
 
 
@@ -74,9 +84,11 @@ class ConfirmationDialog extends Control
 	 */
 	public function formatSignalMethod($signal)
 	{
-		if (stripos($signal, 'confirm') === 0 &&
-			isset($this->confirmationHandlers[lcfirst(substr($signal, 7))]))
+		if (    stripos($signal, 'confirm') === 0
+			&&  isset($this->confirmationHandlers[lcfirst(substr($signal, 7))])
+		) {
 			return '_handleShow';
+		}
 
 		parent::formatSignalMethod($signal);
 	}
@@ -85,13 +97,15 @@ class ConfirmationDialog extends Control
 	/**
 	 * Access to Yes or No form button controls.
 	 * @param string $name Only 'yes' or 'no' is accepted
+	 * @throws Nette\MemberAccessException
 	 * @return Nette\Forms\Controls\SubmitButton
 	 */
 	public function getFormButton($name)
 	{
 		$name = (string)$name;
-		if ($name !== 'yes' && $name !== 'no')
-			throw new MemberAccessException("Only 'yes' or 'no' is accepted in \$name. '$name' given.");
+		if ($name !== 'yes' && $name !== 'no') {
+			throw new Nette\MemberAccessException("Only 'yes' or 'no' is accepted in \$name. '$name' given.");
+		}
 
 		return $this->form[$name];
 	}
@@ -109,7 +123,7 @@ class ConfirmationDialog extends Control
 
 	/**
 	 * Return question element protype
-	 * @return Html
+	 * @return Nette\Utils\Html
 	 */
 	public function getQuestionPrototype()
 	{
@@ -144,67 +158,75 @@ class ConfirmationDialog extends Control
 	/**
 	 * Add confirmation handler to "dynamicaly named signals".
 	 * @param string $name Confirmation/signal name
-	 * @param callback $methodCallback Callback called when confirmation succeed
+	 * @param callback|Nette\Callback $methodCallback Callback called when confirmation succeed
 	 * @param callback|string $question Callback ($confirmForm, $params) or string containing question text.
+	 * @throws Nette\InvalidArgumentException
 	 * @return ConfirmationDialog
 	 */
 	public function addConfirmer($name, $methodCallback, $question)
 	{
-		if (!preg_match('/[A-Za-z_]+/', $name))
-			throw new InvalidArgumentException("Confirmation name contain is invalid.");
-	
-		if (isset($this->confirmationHandlers[$name]))
-			throw new InvalidArgumentException("Confirmation '$confirmName' already exists.");
-
-		if (!is_callable($methodCallback))
-			throw new InvalidArgumentException('$methodCallback must be callable.');
-
-		if (!is_callable($question) && !is_string($question))
-			throw new InvalidArgumentException('$question must be callback or string.');
+		if (!preg_match('/[A-Za-z_]+/', $name)) {
+			throw new Nette\InvalidArgumentException("Confirmation name contain is invalid.");
+		}
+		if (isset($this->confirmationHandlers[$name])) {
+			throw new Nette\InvalidArgumentException("Confirmation '$name' already exists.");
+		}
+		if (!is_callable($methodCallback)) {
+			throw new Nette\InvalidArgumentException('$methodCallback must be callable.');
+		}
+		if (!is_callable($question) && !is_string($question)) {
+			throw new Nette\InvalidArgumentException('$question must be callback or string.');
+		}
 
 		$this->confirmationHandlers[$name] = array(
 			'handler' => $methodCallback,
 			'question' => $question,
-			);
+		);
 
 		return $this;
 	}
 
 	/**
 	 * Show dialog for confirmation
-	 * @param <type> $confirmName
-	 * @param <type> $params
+	 * @param string $confirmName
+	 * @param array $params
+	 * @throws Nette\InvalidArgumentException
+	 * @throws Nette\InvalidStateException
 	 */
 	public function showConfirm($confirmName, $params = array())
 	{
-		if (!is_string($confirmName))
-			throw new InvalidArgumentException('$confirmName must be string.');
-		if (!isset($this->confirmationHandlers[$confirmName]))
-			throw new InvalidStateException("confirmation '$confirmName' do not exist.");
-		if (!is_array($params))
-			throw new InvalidArgumentException('$params must be array.');
+		if (!is_string($confirmName)) {
+			throw new Nette\InvalidArgumentException('$confirmName must be string.');
+		}
+		if (!isset($this->confirmationHandlers[$confirmName])) {
+			throw new Nette\InvalidStateException("confirmation '$confirmName' do not exist.");
+		}
+		if (!is_array($params)) {
+			throw new Nette\InvalidArgumentException('$params must be array.');
+		}
 
 		$confirm = $this->confirmationHandlers[$confirmName];
 
-		if (is_callable($confirm['question']))
+		if (is_callable($confirm['question'])) {
 			$question = call_user_func_array($confirm['question'], array($this, $params));
-		else
+		} else {
 			$question = $confirm['question'];
+		}
 
-		if ($question instanceof Html)
+		if ($question instanceof Html) {
 			$this->question->setHtml($question);
-		else
+		} else {
 			$this->question->setText($question);
-	
+		}
+
 		$token = $this->generateToken($confirmName);
+		$this->form['token']->value = $token;
 		$this->session->$token = array(
 			'confirm' => $confirmName,
 			'params' => $params,
-			);
+		);
 
-		$this->form['token']->value = $token;
-
-		$this->show = TRUE;
+		$this->visible = TRUE;
 		$this->invalidateControl();
 	}
 
@@ -219,8 +241,8 @@ class ConfirmationDialog extends Control
 		list(,$signal) = $this->presenter->getSignal();
 		$confirmName = (substr($signal, 7));
 		$confirmName{0} = strtolower($confirmName{0});
-		$params = $this->getParam();
-		
+		$params = $this->getParameter();
+
 		$this->showConfirm($confirmName, $params);
 	}
 
@@ -228,16 +250,13 @@ class ConfirmationDialog extends Control
 	/**
 	 * Confirm YES clicked
 	 * @param Nette\Forms\Controls\SubmitButton $button
-	 * @return void
 	 */
 	public function confirmClicked($button)
 	{
 		$form = $button->getForm(TRUE);
 		$values = $form->getValues();
-		if (!isset($this->session->{$values['token']}))
-		{
-			if (self::$_strings['expired'] != '')
-			{
+		if (!isset($this->session->{$values['token']})) {
+			if (self::$_strings['expired'] != '') {
 				$this->presenter->flashMessage(self::$_strings['expired']);
 			}
 			$this->invalidateControl();
@@ -247,7 +266,7 @@ class ConfirmationDialog extends Control
 		$action = $this->session->{$values['token']};
 		unset($this->session->{$values['token']});
 
-		$this->show = FALSE;
+		$this->visible = FALSE;
 		$this->invalidateControl();
 
 		$callback = $this->confirmationHandlers[$action['confirm']]['handler'];
@@ -256,8 +275,9 @@ class ConfirmationDialog extends Control
 		$args[] = $this;
 		call_user_func_array($callback, $args);
 
-		if (!$this->presenter->isAjax() && $this->show == FALSE)
+		if (!$this->presenter->isAjax() && $this->visible == FALSE) {
 			$this->presenter->redirect('this');
+		}
 	}
 
 
@@ -269,53 +289,54 @@ class ConfirmationDialog extends Control
 	{
 		$form = $button->getForm(TRUE);
 		$values = $form->getValues();
-		if (isset($this->session->{$values['token']}))
-		{
+		if (isset($this->session->{$values['token']})) {
 			unset($this->session->{$values['token']});
 		}
 
-		$this->show = FALSE;
+		$this->visible = FALSE;
 		$this->invalidateControl();
-		if (!$this->presenter->isAjax())
+		if (!$this->presenter->isAjax()) {
 			$this->presenter->redirect('this');
+		}
 	}
 
 
 	/************** rendering **************/
 
 	/**
-	 *
 	 * @return bool
 	 */
 	public function isVisible()
 	{
-		return $this->show;
+		return $this->visible;
 	}
 
-	
+
 	/**
-	 * Template factory.
-	 * @return ITemplate
+	 * @param string|NULL
+	 * @return Nette\Templating\ITemplate
 	 */
 	protected function createTemplate($class = NULL)
 	{
 		$template = parent::createTemplate();
-		// Nette filter is registered by default in Control.
-		$template->setFile(dirname(__FILE__) . '/form.phtml');
+		$template->setFile(__DIR__ . '/confirmationDialog.latte');
+
 		return $template;
 	}
 
-	
+
 	public function render()
 	{
-		if ($this->show)
-		{
-			if ($this->form['token']->value == NULL)
+		if ($this->visible) {
+			if ($this->form['token']->value === NULL) {
 				throw new InvalidStateException('Token is not set!');
+			}
 		}
-		$this->template->visible = $this->show;
-		$this->template->class = $this->dialogClass;
+
+		$this->template->visible = $this->visible;
+		$this->template->class = $this->cssClass;
 		$this->template->question = $this->question;
+
 		return $this->template->render();
 	}
 

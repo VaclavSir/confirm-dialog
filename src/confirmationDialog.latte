@@ -13,11 +13,15 @@
  *}
 
 {snippet}
-{if $visible}
-<div class="overlay"></div>
-<div class="confirm_dialog {$class}">
-	{$question}
-	{widget form}
-</div>
-{/if}
+	{if $visible}
+		<div class="overlay {$class}--overlay"></div>
+		<div class="{$class} modal">
+			<div class="modal-body">
+				{$question}
+			</div>
+			<div class="modal-footer">
+				{control form}
+			</div>
+		</div>
+	{/if}
 {/snippet}
